@@ -243,6 +243,8 @@ void emit_mouse_move_event(int fd, float x, float y) {
 }
 
 int main() {
+    system("swaymsg input 1452:850:Apple_MTP_multi-touch events disabled");
+
     int tfd;
     struct libevdev* trackpad;
 
@@ -271,5 +273,7 @@ int main() {
     libevdev_free(trackpad);
     close(tfd);
     close(ufd);
+
+    system("swaymsg input 1452:850:Apple_MTP_multi-touch events enabled");
     return 0;
 }
