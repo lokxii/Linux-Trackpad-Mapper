@@ -91,16 +91,21 @@ void init_trackpad(struct libevdev** ev_dev, int* fd) {
 int init_uinput() {
     int fd = open("/dev/uinput", O_WRONLY);
 
+    static const int rel_list[] = {REL_X, REL_Y, REL_Z, REL_WHEEL, REL_HWHEEL};
     if (ioctl(fd, UI_SET_EVBIT, EV_REL)) {
         error("UI_SET_EVBIT %s failed\n", "EV_REL");
     }
-
-    static const int rel_list[] = {REL_X, REL_Y, REL_Z, REL_WHEEL, REL_HWHEEL};
-
     for (int i = 0; i < sizeof(rel_list) / sizeof(int); i++) {
         if (ioctl(fd, UI_SET_RELBIT, rel_list[i])) {
             error("UI_SET_RELBIT %d failed\n", i);
         }
+    }
+
+    if (ioctl(fd, UI_SET_EVBIT, EV_KEY)) {
+        error("UI_SET_EVBIT %s failed\n", "EV_KEY");
+    }
+    if (ioctl(fd, UI_SET_KEYBIT, BTN_LEFT)) {
+        error("UI_SET_KEYBIT %d failed\n", BTN_LEFT);
     }
 
     static const struct uinput_setup usetup = {
@@ -124,7 +129,10 @@ int init_uinput() {
     return fd;
 }
 
-void read_events(struct libevdev* dev, Touch touches[TOUCHES_N]) {
+void read_events(
+    struct libevdev* dev,
+    Touch touches[TOUCHES_N],
+    int* leftclick) {
     struct input_event ev;
 
     static int i = 0;
@@ -140,23 +148,28 @@ void read_events(struct libevdev* dev, Touch touches[TOUCHES_N]) {
             }
             return;
         }
+        if (ev.type == EV_KEY && ev.code == BTN_LEFT) {
+            *leftclick = ev.value;
+            return;
+        }
+        if (ev.type == EV_ABS) {
+            switch (ev.code) {
+                case ABS_MT_SLOT:
+                    assert(ev.value >= 0 && ev.value < TOUCHES_N);
+                    // printf("SLOT: %d\n", ev.value);
+                    touches[i].mod = 1;
+                    break;
 
-        switch (ev.code) {
-            case ABS_MT_SLOT:
-                assert(ev.value >= 0 && ev.value < TOUCHES_N);
-                // printf("SLOT: %d\n", ev.value);
-                touches[i].mod = 1;
-                break;
+                case ABS_MT_POSITION_X:
+                    // printf("X: %d\n", ev.value);
+                    touches[i].x = ev.value - X_MIN;
+                    break;
 
-            case ABS_MT_POSITION_X:
-                // printf("X: %d\n", ev.value);
-                touches[i].x = ev.value - X_MIN;
-                break;
-
-            case ABS_MT_POSITION_Y:
-                // printf("Y: %d\n", ev.value);
-                touches[i].y = ev.value - Y_MIN;
-                break;
+                case ABS_MT_POSITION_Y:
+                    // printf("Y: %d\n", ev.value);
+                    touches[i].y = ev.value - Y_MIN;
+                    break;
+            }
         }
     }
 }
@@ -166,8 +179,8 @@ int mouse_move(Touch touches[TOUCHES_N], float* x, float* y, Geom screen) {
 #define Touch_eq(a, b) a.mod == b.mod&& a.x == b.x&& a.y == b.y
     const float X_ACCEPT_LOW = 0.65;
     const float X_ACCEPT_HIGH = 0.95;
-    const float Y_ACCEPT_LOW = 0.05;
-    const float Y_ACCEPT_HIGH = 0.35;
+    const float Y_ACCEPT_LOW = 0.1;
+    const float Y_ACCEPT_HIGH = 0.4;
     float screen_ratio = screen.w / screen.h;
 
     // Ignore events outside range
@@ -183,7 +196,7 @@ int mouse_move(Touch touches[TOUCHES_N], float* x, float* y, Geom screen) {
     *y = (touches[0].y - Y_RANGE * Y_ACCEPT_LOW) /
          (Y_RANGE * (Y_ACCEPT_HIGH - Y_ACCEPT_LOW)) * screen.h;
 
-    printf("%.1f %.1f\n", *x, *y);
+    // printf("%.1f %.1f\n", *x, *y);
 
     return 1;
 }
@@ -242,9 +255,15 @@ int main() {
 
     Touch touches[TOUCHES_N];
     float x, y;
+    int leftclick = 0;
     while (1) {
-        read_events(trackpad, touches);
-        if (mouse_move(touches, &x, &y, screen)) {
+        int newleftclick = leftclick;
+        read_events(trackpad, touches, &newleftclick);
+        if (leftclick != newleftclick) {
+            puts(newleftclick ? "DOWN" : "UP");
+            uinput_emit(ufd, EV_KEY, BTN_LEFT, newleftclick, 1);
+            leftclick = newleftclick;
+        } else if (mouse_move(touches, &x, &y, screen)) {
             emit_mouse_move_event(ufd, x, y);
         }
     }
