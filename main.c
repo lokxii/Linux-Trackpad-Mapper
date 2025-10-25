@@ -262,7 +262,6 @@ int main() {
         int newleftclick = leftclick;
         read_events(trackpad, touches, &newleftclick);
         if (leftclick != newleftclick) {
-            puts(newleftclick ? "DOWN" : "UP");
             uinput_emit(ufd, EV_KEY, BTN_LEFT, newleftclick, 1);
             leftclick = newleftclick;
         } else if (mouse_move(touches, &x, &y, screen)) {
