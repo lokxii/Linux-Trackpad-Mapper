@@ -163,23 +163,11 @@ void read_events(struct libevdev* dev, Touch touches[TOUCHES_N]) {
 // Only interested in touches[0]
 int mouse_move(Touch touches[TOUCHES_N], int* x, int* y, Geom screen) {
 #define Touch_eq(a, b) a.mod == b.mod&& a.x == b.x&& a.y == b.y
-    static Touch t = {.mod = 1, .x = 0, .y = 0};
     const float X_ACCEPT_LOW = 0.65;
     const float X_ACCEPT_HIGH = 0.95;
     const float Y_ACCEPT_LOW = 0.1;
-    const float Y_ACCEPT_HIGH = 0.65;
+    const float Y_ACCEPT_HIGH = 0.35;
     float screen_ratio = screen.w / screen.h;
-
-    if (!t.mod) {
-        t.mod = 1;
-        *x = t.x = X_RANGE * X_ACCEPT_LOW;
-        *y = t.y = Y_RANGE * X_ACCEPT_LOW / screen_ratio;
-        return 1;
-    }
-
-    if (Touch_eq(t, touches[0])) {
-        return 0;
-    }
 
     // Ignore events outside range
     if (touches[0].x < X_RANGE * X_ACCEPT_LOW ||
@@ -190,13 +178,11 @@ int mouse_move(Touch touches[TOUCHES_N], int* x, int* y, Geom screen) {
     }
 
     *x = (touches[0].x - X_RANGE * X_ACCEPT_LOW) /
-         (X_RANGE * (X_ACCEPT_HIGH - X_ACCEPT_LOW)) * screen.w / 2;
+         (X_RANGE * (X_ACCEPT_HIGH - X_ACCEPT_LOW)) * screen.w;
     *y = (touches[0].y - Y_RANGE * Y_ACCEPT_LOW) /
-         (Y_RANGE * (1 - Y_ACCEPT_HIGH - Y_ACCEPT_LOW)) * screen.h / 2;
+         (Y_RANGE * (Y_ACCEPT_HIGH - Y_ACCEPT_LOW)) * screen.h;
 
     printf("%d %d\n", *x, *y);
-
-    t = touches[0];
 
     return 1;
 }
@@ -230,7 +216,6 @@ int main() {
 
     init_trackpad(&trackpad, &tfd);
     int ufd = init_uinput();
-    sleep(1);  // wait for wayland to recognize virtual device
 
     Geom screen = get_screen_geom();
     emit_mouse_move_event(ufd, INT32_MIN + 1, INT32_MIN + 1);
