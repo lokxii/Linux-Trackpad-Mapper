@@ -2,6 +2,7 @@
 #include <errno.h>
 #include <fcntl.h>
 #include <limits.h>
+#include <math.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -205,19 +206,27 @@ void uinput_emit(
     }
 }
 
-void emit_mouse_move_event(int fd, float x, float y) {
-    static float X = 0, Y = 0;
-
-    uinput_emit(fd, EV_REL, REL_X, x - X, 0);
-    uinput_emit(fd, EV_REL, REL_Y, y - Y, 1);
-
-    X = x;
-    Y = y;
-}
-
 void reset_mouse(int fd) {
     uinput_emit(fd, EV_REL, REL_X, INT32_MIN, 0);
     uinput_emit(fd, EV_REL, REL_Y, INT32_MIN, 1);
+}
+
+void emit_mouse_move_event(int fd, float x, float y) {
+    static float X = 0, Y = 0;
+    static float dx = 0, dy = 0;
+
+    dx += x - X;
+    dy += y - Y;
+
+    int dx_i = (dx > 0 ? floor : ceil)(dx);
+    int dy_i = (dy > 0 ? floor : ceil)(dy);
+    uinput_emit(fd, EV_REL, REL_X, dx_i, 0);
+    uinput_emit(fd, EV_REL, REL_Y, dy_i, 1);
+    dx -= dx_i;
+    dy -= dy_i;
+
+    X = x;
+    Y = y;
 }
 
 int main() {

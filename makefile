@@ -1,6 +1,6 @@
 CC=gcc
 CFLAGS=-g `pkg-config --cflags libevdev`
-LDFLAGS=`pkg-config --libs libevdev` -lX11
+LDFLAGS=`pkg-config --libs libevdev` -lX11 -lm
 
 all: main
 
