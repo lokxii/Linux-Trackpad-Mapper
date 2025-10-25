@@ -161,11 +161,11 @@ void read_events(struct libevdev* dev, Touch touches[TOUCHES_N]) {
 }
 
 // Only interested in touches[0]
-int mouse_move(Touch touches[TOUCHES_N], int* x, int* y, Geom screen) {
+int mouse_move(Touch touches[TOUCHES_N], float* x, float* y, Geom screen) {
 #define Touch_eq(a, b) a.mod == b.mod&& a.x == b.x&& a.y == b.y
     const float X_ACCEPT_LOW = 0.65;
     const float X_ACCEPT_HIGH = 0.95;
-    const float Y_ACCEPT_LOW = 0.1;
+    const float Y_ACCEPT_LOW = 0.05;
     const float Y_ACCEPT_HIGH = 0.35;
     float screen_ratio = screen.w / screen.h;
 
@@ -182,7 +182,7 @@ int mouse_move(Touch touches[TOUCHES_N], int* x, int* y, Geom screen) {
     *y = (touches[0].y - Y_RANGE * Y_ACCEPT_LOW) /
          (Y_RANGE * (Y_ACCEPT_HIGH - Y_ACCEPT_LOW)) * screen.h;
 
-    printf("%d %d\n", *x, *y);
+    printf("%.1f %.1f\n", *x, *y);
 
     return 1;
 }
@@ -205,9 +205,19 @@ void uinput_emit(
     }
 }
 
-void emit_mouse_move_event(int fd, int x, int y) {
-    uinput_emit(fd, EV_REL, REL_X, x, 0);
-    uinput_emit(fd, EV_REL, REL_Y, y, 1);
+void emit_mouse_move_event(int fd, float x, float y) {
+    static float X = 0, Y = 0;
+
+    uinput_emit(fd, EV_REL, REL_X, x - X, 0);
+    uinput_emit(fd, EV_REL, REL_Y, y - Y, 1);
+
+    X = x;
+    Y = y;
+}
+
+void reset_mouse(int fd) {
+    uinput_emit(fd, EV_REL, REL_X, INT32_MIN, 0);
+    uinput_emit(fd, EV_REL, REL_Y, INT32_MIN, 1);
 }
 
 int main() {
@@ -216,16 +226,16 @@ int main() {
 
     init_trackpad(&trackpad, &tfd);
     int ufd = init_uinput();
+    sleep(1);
+    reset_mouse(ufd);
 
     Geom screen = get_screen_geom();
-    emit_mouse_move_event(ufd, INT32_MIN + 1, INT32_MIN + 1);
 
     Touch touches[TOUCHES_N];
-    int x, y;
+    float x, y;
     while (1) {
         read_events(trackpad, touches);
         if (mouse_move(touches, &x, &y, screen)) {
-            emit_mouse_move_event(ufd, INT32_MIN + 1, INT32_MIN + 1);
             emit_mouse_move_event(ufd, x, y);
         }
     }
