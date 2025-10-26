@@ -1,7 +1,6 @@
 #include <assert.h>
 #include <errno.h>
 #include <fcntl.h>
-#include <limits.h>
 #include <math.h>
 #include <stdint.h>
 #include <stdio.h>
@@ -11,9 +10,7 @@
 #include <time.h>
 #include <unistd.h>
 
-#include <X11/Xatom.h>
 #include <X11/Xlib.h>
-#include <X11/Xresource.h>
 #include <libevdev-1.0/libevdev/libevdev.h>
 #include <linux/uinput.h>
 
@@ -129,6 +126,7 @@ int init_uinput() {
     return fd;
 }
 
+// TODO: Some key events are related to finger down and up?
 void read_events(
     struct libevdev* dev,
     Touch touches[TOUCHES_N],
@@ -243,8 +241,6 @@ void emit_mouse_move_event(int fd, float x, float y) {
 }
 
 int main() {
-    system("swaymsg input 1452:850:Apple_MTP_multi-touch events disabled");
-
     int tfd;
     struct libevdev* trackpad;
 
@@ -272,7 +268,5 @@ int main() {
     libevdev_free(trackpad);
     close(tfd);
     close(ufd);
-
-    system("swaymsg input 1452:850:Apple_MTP_multi-touch events enabled");
     return 0;
 }
