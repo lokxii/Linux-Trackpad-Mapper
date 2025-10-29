@@ -14,7 +14,7 @@
 #include <libevdev-1.0/libevdev/libevdev.h>
 #include <linux/uinput.h>
 
-#define TOUCHES_N 20
+#define TOUCH_MAX 20
 
 // negative to left
 #define X_MIN -5896.0
@@ -36,6 +36,12 @@ typedef struct {
     float w;
     float h;
 } Geom;
+
+typedef enum {
+    CLICK_NONE,
+    CLICK_LEFT,
+    CLICK_RIGHT,
+} Click;
 
 #define error(...)                                    \
     do {                                              \
@@ -126,11 +132,11 @@ int init_uinput() {
     return fd;
 }
 
-// TODO: Some key events are related to finger down and up?
 void read_events(
     struct libevdev* dev,
-    Touch touches[TOUCHES_N],
-    int* leftclick) {
+    Touch touches[TOUCH_MAX],
+    Click* click,
+    int* touch_n) {
     struct input_event ev;
 
     static int i = 0;
@@ -140,41 +146,73 @@ void read_events(
             return;
         }
         if (ev.type == EV_SYN) {
-            // puts("---");
             if (ev.code != SYN_REPORT) {
                 error("Non reporting EV_SYN %d", ev.code);
             }
             return;
         }
-        if (ev.type == EV_KEY && ev.code == BTN_LEFT) {
-            *leftclick = ev.value;
+        if (ev.type == EV_KEY) {
+            switch (ev.code) {
+                case BTN_LEFT:
+                    *click = ev.value ? CLICK_LEFT : CLICK_NONE;
+                    break;
+
+                case BTN_RIGHT:
+                    *click = ev.value ? CLICK_RIGHT : CLICK_NONE;
+                    break;
+
+                case BTN_TOOL_DOUBLETAP:
+                    *touch_n = ev.value ? 2 : 1;
+                    break;
+
+                case BTN_TOOL_TRIPLETAP:
+                    *touch_n = ev.value ? 3 : 1;
+                    break;
+
+                case BTN_TOOL_QUADTAP:
+                    *touch_n = ev.value ? 4 : 1;
+                    break;
+
+                case BTN_TOOL_QUINTTAP:
+                    *touch_n = ev.value ? 5 : 1;
+                    break;
+            }
             return;
         }
         if (ev.type == EV_ABS) {
             switch (ev.code) {
                 case ABS_MT_SLOT:
-                    assert(ev.value >= 0 && ev.value < TOUCHES_N);
-                    // printf("SLOT: %d\n", ev.value);
+                    assert(ev.value >= 0 && ev.value < TOUCH_MAX);
+                    i = ev.value;
                     touches[i].mod = 1;
                     break;
 
                 case ABS_MT_POSITION_X:
-                    // printf("X: %d\n", ev.value);
                     touches[i].x = ev.value - X_MIN;
                     break;
 
                 case ABS_MT_POSITION_Y:
-                    // printf("Y: %d\n", ev.value);
                     touches[i].y = ev.value - Y_MIN;
                     break;
             }
+            return;
         }
     }
 }
 
 // Only interested in touches[0]
-int mouse_move(Touch touches[TOUCHES_N], float* x, float* y, Geom screen) {
+int mouse_move(
+    Touch touches[TOUCH_MAX],
+    int touch_n,
+    float* x,
+    float* y,
+    Geom screen) {
 #define Touch_eq(a, b) a.mod == b.mod&& a.x == b.x&& a.y == b.y
+    // if (touch_n > 1) {
+    //     return 0;
+    // }
+    size_t i = 0;
+
     const float X_ACCEPT_LOW = 0.65;
     const float X_ACCEPT_HIGH = 0.95;
     const float Y_ACCEPT_LOW = 0.1;
@@ -182,20 +220,17 @@ int mouse_move(Touch touches[TOUCHES_N], float* x, float* y, Geom screen) {
     float screen_ratio = screen.w / screen.h;
 
     // Ignore events outside range
-    if (touches[0].x < X_RANGE * X_ACCEPT_LOW ||
-        touches[0].x > X_RANGE * X_ACCEPT_HIGH ||
-        touches[0].y < Y_RANGE * Y_ACCEPT_LOW ||
-        touches[0].y > Y_RANGE * Y_ACCEPT_HIGH) {
+    if (touches[i].x < X_RANGE * X_ACCEPT_LOW ||
+        touches[i].x > X_RANGE * X_ACCEPT_HIGH ||
+        touches[i].y < Y_RANGE * Y_ACCEPT_LOW ||
+        touches[i].y > Y_RANGE * Y_ACCEPT_HIGH) {
         return 0;
     }
 
-    *x = (touches[0].x - X_RANGE * X_ACCEPT_LOW) /
+    *x = (touches[i].x - X_RANGE * X_ACCEPT_LOW) /
          (X_RANGE * (X_ACCEPT_HIGH - X_ACCEPT_LOW)) * screen.w;
-    *y = (touches[0].y - Y_RANGE * Y_ACCEPT_LOW) /
+    *y = (touches[i].y - Y_RANGE * Y_ACCEPT_LOW) /
          (Y_RANGE * (Y_ACCEPT_HIGH - Y_ACCEPT_LOW)) * screen.h;
-
-    // printf("%.1f %.1f\n", *x, *y);
-
     return 1;
 }
 
@@ -251,16 +286,19 @@ int main() {
 
     Geom screen = get_screen_geom();
 
-    Touch touches[TOUCHES_N];
+    Touch touches[TOUCH_MAX];
     float x, y;
-    int leftclick = 0;
+    Click click = CLICK_NONE;
+    int touch_n = 1;
     while (1) {
-        int newleftclick = leftclick;
-        read_events(trackpad, touches, &newleftclick);
-        if (leftclick != newleftclick) {
-            uinput_emit(ufd, EV_KEY, BTN_LEFT, newleftclick, 1);
-            leftclick = newleftclick;
-        } else if (mouse_move(touches, &x, &y, screen)) {
+        Click new_click = click;
+        read_events(trackpad, touches, &new_click, &touch_n);
+
+        if (click != new_click) {
+            uinput_emit(ufd, EV_KEY, BTN_LEFT, new_click, 1);
+            click = new_click;
+        }
+        if (mouse_move(touches, touch_n, &x, &y, screen)) {
             emit_mouse_move_event(ufd, x, y);
         }
     }
