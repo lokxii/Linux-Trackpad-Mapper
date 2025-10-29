@@ -37,12 +37,6 @@ typedef struct {
     float h;
 } Geom;
 
-typedef enum {
-    CLICK_NONE,
-    CLICK_LEFT,
-    CLICK_RIGHT,
-} Click;
-
 #define error(...)                                    \
     do {                                              \
         time_t t = time(NULL);                        \
@@ -110,6 +104,9 @@ int init_uinput() {
     if (ioctl(fd, UI_SET_KEYBIT, BTN_LEFT)) {
         error("UI_SET_KEYBIT %d failed\n", BTN_LEFT);
     }
+    if (ioctl(fd, UI_SET_KEYBIT, BTN_RIGHT)) {
+        error("UI_SET_KEYBIT %d failed\n", BTN_RIGHT);
+    }
 
     static const struct uinput_setup usetup = {
         .name = "osu mouse",
@@ -135,7 +132,7 @@ int init_uinput() {
 void read_events(
     struct libevdev* dev,
     Touch touches[TOUCH_MAX],
-    Click* click,
+    int* click,
     int* touch_n) {
     struct input_event ev;
 
@@ -154,11 +151,7 @@ void read_events(
         if (ev.type == EV_KEY) {
             switch (ev.code) {
                 case BTN_LEFT:
-                    *click = ev.value ? CLICK_LEFT : CLICK_NONE;
-                    break;
-
-                case BTN_RIGHT:
-                    *click = ev.value ? CLICK_RIGHT : CLICK_NONE;
+                    *click = ev.value;
                     break;
 
                 case BTN_TOOL_DOUBLETAP:
@@ -288,14 +281,22 @@ int main() {
 
     Touch touches[TOUCH_MAX];
     float x, y;
-    Click click = CLICK_NONE;
+    int click = 0;
     int touch_n = 1;
     while (1) {
-        Click new_click = click;
+        int new_click = click;
         read_events(trackpad, touches, &new_click, &touch_n);
 
         if (click != new_click) {
-            uinput_emit(ufd, EV_KEY, BTN_LEFT, new_click, 1);
+            switch (touch_n) {
+                case 1:
+                    uinput_emit(ufd, EV_KEY, BTN_LEFT, new_click, 1);
+                    break;
+
+                case 2:
+                    uinput_emit(ufd, EV_KEY, BTN_RIGHT, new_click, 1);
+                    break;
+            }
             click = new_click;
         }
         if (mouse_move(touches, touch_n, &x, &y, screen)) {
