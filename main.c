@@ -17,13 +17,11 @@
 #define TOUCH_MAX 20
 
 // negative to left
-#define X_MIN -5896.0
-#define X_MAX 6416.0
+float X_MIN, X_MAX;
 #define X_RANGE (X_MAX - X_MIN)
 
 // negative to up
-#define Y_MIN -7363.0
-#define Y_MAX 163.0
+float Y_MIN, Y_MAX;
 #define Y_RANGE (Y_MAX - Y_MIN)
 
 typedef struct {
@@ -83,6 +81,24 @@ void init_trackpad(struct libevdev** ev_dev, int* fd) {
         error("libevdev_new_from_fd: %s", strerror(-r));
         exit(1);
     }
+
+    const struct input_absinfo* x_info =
+        libevdev_get_abs_info(*ev_dev, ABS_MT_POSITION_X);
+    const struct input_absinfo* y_info =
+        libevdev_get_abs_info(*ev_dev, ABS_MT_POSITION_Y);
+    if (!x_info) {
+        error("Cannot query trackpad x axis range");
+        exit(1);
+    }
+    if (!y_info) {
+        error("Cannot query trackpad y axis range");
+        exit(1);
+    }
+
+    X_MIN = x_info->minimum;
+    X_MAX = x_info->maximum;
+    Y_MIN = y_info->minimum;
+    Y_MAX = y_info->maximum;
 }
 
 int init_uinput() {
