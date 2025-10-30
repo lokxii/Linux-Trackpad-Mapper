@@ -25,7 +25,7 @@ float Y_MIN, Y_MAX;
 #define Y_RANGE (Y_MAX - Y_MIN)
 
 typedef struct {
-    int mod;  // non empty flag
+    int down;
     int x;
     int y;
 } Touch;
@@ -172,18 +172,34 @@ void read_events(
 
                 case BTN_TOOL_DOUBLETAP:
                     *touch_n = ev.value ? 2 : 1;
+                    memset(
+                        &touches[*touch_n],
+                        0,
+                        (TOUCH_MAX - *touch_n) * sizeof(*touches));
                     break;
 
                 case BTN_TOOL_TRIPLETAP:
                     *touch_n = ev.value ? 3 : 1;
+                    memset(
+                        &touches[*touch_n],
+                        0,
+                        (TOUCH_MAX - *touch_n) * sizeof(*touches));
                     break;
 
                 case BTN_TOOL_QUADTAP:
                     *touch_n = ev.value ? 4 : 1;
+                    memset(
+                        &touches[*touch_n],
+                        0,
+                        (TOUCH_MAX - *touch_n) * sizeof(*touches));
                     break;
 
                 case BTN_TOOL_QUINTTAP:
                     *touch_n = ev.value ? 5 : 1;
+                    memset(
+                        &touches[*touch_n],
+                        0,
+                        (TOUCH_MAX - *touch_n) * sizeof(*touches));
                     break;
             }
             return;
@@ -193,7 +209,7 @@ void read_events(
                 case ABS_MT_SLOT:
                     assert(ev.value >= 0 && ev.value < TOUCH_MAX);
                     i = ev.value;
-                    touches[i].mod = 1;
+                    touches[i].down = 1;
                     break;
 
                 case ABS_MT_POSITION_X:
@@ -216,10 +232,6 @@ int mouse_move(
     float* x,
     float* y,
     Geom screen) {
-#define Touch_eq(a, b) a.mod == b.mod&& a.x == b.x&& a.y == b.y
-    // if (touch_n > 1) {
-    //     return 0;
-    // }
     size_t i = 0;
 
     const float X_ACCEPT_LOW = 0.65;
