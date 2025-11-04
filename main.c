@@ -134,6 +134,50 @@ Geom get_screen_geom() {
     return screen;
 }
 
+void check_capability(struct libevdev* ev_dev, const char* path) {
+    if (!libevdev_has_event_type(ev_dev, EV_KEY)) {
+        error("Event type EV_KEY missing for %s", path);
+        exit(1);
+    }
+    if (!libevdev_has_event_code(ev_dev, EV_KEY, BTN_LEFT)) {
+        error("Event code BTN_LEFT missing for %s", path);
+        exit(1);
+    }
+    if (!libevdev_has_event_code(ev_dev, EV_KEY, BTN_TOOL_DOUBLETAP)) {
+        error("Event code BTN_TOOL_DOUBLETAP missing for %s", path);
+        exit(1);
+    }
+    if (!libevdev_has_event_code(ev_dev, EV_KEY, BTN_TOOL_TRIPLETAP)) {
+        error("Event code BTN_TOOL_TRIPLETAP missing for %s", path);
+        exit(1);
+    }
+    if (!libevdev_has_event_code(ev_dev, EV_KEY, BTN_TOOL_QUADTAP)) {
+        error("Event code BTN_TOOL_QUADTAP missing for %s", path);
+        exit(1);
+    }
+    if (!libevdev_has_event_code(ev_dev, EV_KEY, BTN_TOOL_QUINTTAP)) {
+        error("Event code BTN_TOOL_QUINTTAP missing for %s", path);
+        exit(1);
+    }
+
+    if (!libevdev_has_event_type(ev_dev, EV_ABS)) {
+        error("Event type EV_KEY missing for %s", path);
+        exit(1);
+    }
+    if (!libevdev_has_event_code(ev_dev, EV_ABS, ABS_MT_SLOT)) {
+        error("Event code ABS_MT_SLOT missing for %s", path);
+        exit(1);
+    }
+    if (!libevdev_has_event_code(ev_dev, EV_ABS, ABS_MT_POSITION_X)) {
+        error("Event code ABS_MT_POSITION_X missing for %s", path);
+        exit(1);
+    }
+    if (!libevdev_has_event_code(ev_dev, EV_ABS, ABS_MT_POSITION_Y)) {
+        error("Event code ABS_MT_POSITION_Y missing for %s", path);
+        exit(1);
+    }
+}
+
 void init_trackpad(const char* path, struct libevdev** ev_dev, int* fd) {
     *fd = open(path, O_RDONLY);
     if (*fd == -1) {
@@ -146,6 +190,8 @@ void init_trackpad(const char* path, struct libevdev** ev_dev, int* fd) {
         error("libevdev_new_from_fd: %s", strerror(-r));
         exit(1);
     }
+
+    check_capability(*ev_dev, path);
 
     const struct input_absinfo* x_info =
         libevdev_get_abs_info(*ev_dev, ABS_MT_POSITION_X);
