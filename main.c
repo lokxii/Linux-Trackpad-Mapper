@@ -89,7 +89,8 @@ void list_devices() {
 
     dp = opendir("/dev/input/");
     if (!dp) {
-        perror("opendir");
+        error("opendir(\"/dev/input/\"): %s", strerror(errno));
+        exit(1);
     }
 
     char buf[1024] = {0};
@@ -136,7 +137,7 @@ Geom get_screen_geom() {
 void init_trackpad(const char* path, struct libevdev** ev_dev, int* fd) {
     *fd = open(path, O_RDONLY);
     if (*fd == -1) {
-        perror("open");
+        printf("open(\"%s\"): %s", path, strerror(errno));
         exit(1);
     }
 
@@ -167,6 +168,10 @@ void init_trackpad(const char* path, struct libevdev** ev_dev, int* fd) {
 
 int init_uinput() {
     int fd = open("/dev/uinput", O_WRONLY);
+    if (fd == -1) {
+        error("open(\"/dev/uinput\"): %s", strerror(errno));
+        exit(1);
+    }
 
     static const int rel_list[] = {REL_X, REL_Y, REL_Z, REL_WHEEL, REL_HWHEEL};
     if (ioctl(fd, UI_SET_EVBIT, EV_REL)) {
@@ -197,12 +202,12 @@ int init_uinput() {
             .version = 1}};
 
     if (ioctl(fd, UI_DEV_SETUP, &usetup)) {
-        perror("UI_DEV_SETUP ioctl failed");
+        error("UI_DEV_SETUP ioctl failed: %s", strerror(errno));
         exit(1);
     }
 
     if (ioctl(fd, UI_DEV_CREATE)) {
-        perror("UI_DEV_CREATE ioctl failed");
+        error("UI_DEV_CREATE ioctl failed: %s", strerror(errno));
         exit(1);
     }
 
