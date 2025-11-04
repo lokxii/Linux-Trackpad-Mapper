@@ -1,4 +1,5 @@
 #include <assert.h>
+#include <dirent.h>
 #include <errno.h>
 #include <fcntl.h>
 #include <math.h>
@@ -35,6 +36,11 @@ typedef struct {
     float h;
 } Geom;
 
+typedef struct {
+    int get_input_info;
+    const char* input_event_path;
+} Args;
+
 #define error(...)                                    \
     do {                                              \
         time_t t = time(NULL);                        \
@@ -45,6 +51,64 @@ typedef struct {
         fprintf(stderr, __VA_ARGS__);                 \
         fputc('\n', stderr);                          \
     } while (0)
+
+const char* help_message =
+    "%s [OPTIONS]\n"
+    "   -h, --help\n"
+    "       prints help message\n"
+    "   -l, --list-devices\n"
+    "       list /dev/input/* devices\n"
+    "   -d, --device [path]\n"
+    "       use [path] for trackpad event\n";
+
+Args read_args(int argc, char** argv) {
+    Args args = {0, "/dev/input/event0"};
+    for (int i = 1; i < argc; i++) {
+        if (!strcmp(argv[i], "-h") || !strcmp(argv[i], "--help")) {
+            printf(help_message, argv[0]);
+            exit(0);
+        }
+        if (!strcmp(argv[i], "-l") || !strcmp(argv[i], "--list-devices")) {
+            return (Args){.get_input_info = 1, NULL};
+        }
+        if (!strcmp(argv[i], "-d") || !strcmp(argv[i], "--device")) {
+            i += 1;
+            if (i >= argc) {
+                error("Missing device path");
+                exit(1);
+            }
+            args.input_event_path = argv[i];
+        }
+    }
+    return args;
+}
+
+void list_devices() {
+    DIR* dp;
+    struct dirent* ep;
+
+    dp = opendir("/dev/input/");
+    if (!dp) {
+        perror("opendir");
+    }
+
+    char buf[1024] = {0};
+    for (struct dirent* ep; (ep = readdir(dp));) {
+        sprintf(buf, "/dev/input/%s", ep->d_name);
+
+        int fd = open(buf, O_RDONLY);
+        if (fd == -1) {
+        }
+
+        struct libevdev* dev;
+        int r = libevdev_new_from_fd(fd, &dev);
+        if (r != 0) {
+            continue;
+        }
+
+        printf("/dev/input/%s\t%s\n", ep->d_name, libevdev_get_name(dev));
+    }
+}
 
 Geom get_screen_geom() {
     char* wid;
@@ -69,8 +133,8 @@ Geom get_screen_geom() {
     return screen;
 }
 
-void init_trackpad(struct libevdev** ev_dev, int* fd) {
-    *fd = open("/dev/input/event0", O_RDONLY);
+void init_trackpad(const char* path, struct libevdev** ev_dev, int* fd) {
+    *fd = open(path, O_RDONLY);
     if (*fd == -1) {
         perror("open");
         exit(1);
@@ -226,6 +290,7 @@ void read_events(
 }
 
 // Only interested in touches[0]
+// Write the new coordinates on screen to *x and *y
 int mouse_move(
     Touch touches[TOUCH_MAX],
     int touch_n,
@@ -296,11 +361,17 @@ void emit_mouse_move_event(int fd, float x, float y) {
     Y = y;
 }
 
-int main() {
+int main(int argc, char** argv) {
     int tfd;
     struct libevdev* trackpad;
 
-    init_trackpad(&trackpad, &tfd);
+    Args args = read_args(argc, argv);
+    if (args.get_input_info) {
+        list_devices();
+        exit(0);
+    }
+
+    init_trackpad(args.input_event_path, &trackpad, &tfd);
     int ufd = init_uinput();
     sleep(1);
     reset_mouse(ufd);
